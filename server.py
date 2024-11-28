@@ -6,21 +6,16 @@ def custom_socket():
     print("Server is listening")
 
     while True:
-        data, addr = server_socket.recvfrom(1024) #receive data 
-        print(f"Received {data.decode()} from {addr}")   #print it
-        server_socket.sendto("ACK".encode(), addr)#
-
-        if(receive a SYN = 1 message):
-            select seqnum = 0 or 1 
-            send SYNACK
-                if receive ACK for synack:
-                    ENTER ESTABLISHED STATE:
-                    client_address = addr
-
-
-window_szie = 5;
-
-
-            
-
+        establish_connection(server_socket)
+        data, addr = server_socket.recvfrom(1024)
+        print(f"Received {data.decode()} from {addr}")
+        
+def establish_connection(server_socket):
+    data, addr = server_socket.recvfrom(1024)
+    if data == b"SYN":
+        server_socket.sendto(b"SYN-ACK", addr)
+        ack, _ = server_socket.recvfrom(1024)
+        if ack == b"ACK":
+            print("Connection Established")
+        
 custom_socket()
