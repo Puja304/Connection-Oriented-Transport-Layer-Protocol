@@ -7,10 +7,20 @@ def custom_socket():
 
     while True:
         data, addr = server_socket.recvfrom(1024) #receive data 
-        print(f"Received {data.decode()} from {addr}")
-        server_socket.sendto("ACK".encode(), addr)
+        print(f"Received {data.decode()} from {addr}")   #print it
+        server_socket.sendto("ACK".encode(), addr)#
+
+        if(receive a SYN = 1 message):
+            select seqnum = 0 or 1 
+            send SYNACK
+                if receive ACK for synack:
+                    ENTER ESTABLISHED STATE:
+                    client_address = addr
 
 
+window_szie = 5;
 
+
+            
 
 custom_socket()
