@@ -26,7 +26,7 @@ def my_client():
         response = "Great, let's have a connection"
         ackNum = received.seq_num + 1
         seq += 1
-        message = ReliableTransportLayerProtocolHeader(CLIENT_ADDRESS[1], server_address[1],seq,ackNum,window_size,app_data=response, syn = 0, fin=0, ack=1)
+        message = ReliableTransportLayerProtocolHeader(CLIENT_ADDRESS[1], server_address[1],seq, ackNum, window_size, app_data=response, syn = 0, fin=0, ack=1)
         client_socket.sendto(message.to_bytes(), server_address)
         print("Completed step 3 of the handshake. Now in the connnected state")
 

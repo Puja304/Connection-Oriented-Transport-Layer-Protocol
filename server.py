@@ -57,8 +57,7 @@ def handle_connection(client_address, initial_sequence, initial_ACK):
                 #send a FINACK message
                 fin_ack = ReliableTransportLayerProtocolHeader(
                     SERVER_ADDRESS[1], client_address[1], current_seq,
-                    ack_num, received.receiver_window,  syn=0, ack=1, fin=1,
-                    app_data="It was nice being connected :)"
+                    ack_num, received.receiver_window, app_data="It was nice being connected :), syn=0, ack=1, fin=1"
                 )
                 server_socket.sendto(fin_ack.to_bytes(), client_address)
                 current_seq += 1  # Increment seq for the FIN
@@ -73,9 +72,7 @@ def handle_connection(client_address, initial_sequence, initial_ACK):
             response = f"Acknowledgment : Received {received.app_data}"
             ack_packet = ReliableTransportLayerProtocolHeader(
                 SERVER_ADDRESS[1], client_address[1], current_seq,
-                current_ACK, received.receiver_window, syn=0, ack=1, fin=0, 
-                app_data=response
-            )
+                current_ACK, received.receiver_window, app_data=response, syn=0, ack=1, fin=0)
             server_socket.sendto(ack_packet.to_bytes(), client_address)
 
             #increment sequence number
