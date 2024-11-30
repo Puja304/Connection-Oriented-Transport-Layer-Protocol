@@ -1,6 +1,6 @@
 import socket
 import time
-from utils import ReliableTransportLayerProtocolHeader
+from header import ReliableTransportLayerProtocolHeader
 import random
 
 #SENDER SIDE FLOW CONTROL + CONGESTION CONTROL
