@@ -3,6 +3,8 @@ import time
 from utils import ReliableTransportLayerProtocolHeader
 import random
 
+#SENDER SIDE FLOW CONTROL + CONGESTION CONTROL
+
 
 HOST = '127.0.0.1'  # Localhost
 SENDER_PORT = 8001
