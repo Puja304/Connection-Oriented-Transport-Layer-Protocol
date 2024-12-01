@@ -1,6 +1,6 @@
 import socket
 import time
-from utils import ReliableTransportLayerProtocolHeader
+from header import ReliableTransportLayerProtocolHeader
 import random
 
 # Constants
@@ -36,6 +36,7 @@ def handshake(client_sock):
     message = ReliableTransportLayerProtocolHeader(SENDER_PORT, RECEIVER_PORT, seq, ack_num, WINDOW_SIZE, MSS, syn=synbit, app_data=app_data)
     client_sock.sendto(message.to_bytes(), (HOST, RECEIVER_PORT))
 
+    #Receive SYN-ACK
     data, addr = client_sock.recvfrom(1024)
     data = ReliableTransportLayerProtocolHeader.from_bytes(data)
     if addr == (HOST, RECEIVER_PORT):
@@ -67,6 +68,7 @@ def send_packet(data, client_sock, connection_details):
     packet_bytes = packet_header.to_bytes()
     client_sock.sendto(packet_bytes, (HOST, RECEIVER_PORT))
     print(f"Client: Sent packet {connection_details['senderSeqNum']}.")
+    print(time.time())
 
 
 def receive_ack(client_sock, sent_packets, connection_details):

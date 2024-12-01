@@ -1,85 +1,149 @@
 import socket
 from header import ReliableTransportLayerProtocolHeader
+import time
+import random
 
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)   #establishes it as a UDP socket
-SERVER_ADDRESS = ("127.0.0.1", 8000)    #server's address
+# Constants
+HOST = '127.0.0.1'  # Localhost
+SENDER_PORT = 8001
+RECEIVER_PORT = 8000
+WINDOW_SIZE = 4  # Size of the window in Selective Repeat
+MSS = 15  # Maximum segment size
 
-def custom_socket():
-    server_socket.bind(SERVER_ADDRESS)                          #binds it to our local host
-    print("Server is listening")
+# Function to perform the 3-way handshake on the receiver's side
+def handshake(server_sock):
+    connection_details = {
+        "Alive": False,
+        "IP": 0,
+        "Port": 0,
+        "senderSeqNum": 0,
+        "senderACKNum": 0,
+        "sender_window": 0,
+        "sender_mss": 0,
+        "receiverSeqNum": 0,
+        "receiverACKNum": 0
+    }
+
+    # Receive SYN
+    data, addr = server_sock.recvfrom(1024)
+    data = ReliableTransportLayerProtocolHeader.from_bytes(data)
+    print("Receiver: Received SYN")
+    app_data = "Received SYN, do you still want to connect?"
+    syn_bit = 1
+    ack_bit = 1
+    ack_num = data.seq_num + 1
+    seq = random.randint(0, 2000)
+    message = ReliableTransportLayerProtocolHeader(
+        RECEIVER_PORT, SENDER_PORT, seq, ack_num, WINDOW_SIZE, MSS, syn=syn_bit, ack=ack_bit, app_data=app_data
+    )
+    #print("check")
+    server_sock.sendto(message.to_bytes(), addr)
+    print("Receiver: Sent SYN-ACK")
+
+    # Receive ACK
+    data, addr = server_sock.recvfrom(1024)
+    data = ReliableTransportLayerProtocolHeader.from_bytes(data)
+    if addr == (HOST, SENDER_PORT):
+        if data.syn == 0 and data.ack == 1 and data.ack_num == seq + 1:
+            print("Receiver: Received ACK. 3-way handshake complete")
+
+            connection_details["Alive"] = True
+            connection_details["sender_window"] = data.sending_window
+            connection_details["sender_mss"] = data.mss
+            connection_details["Port"] = addr[1]
+            connection_details["senderSeqNum"] = data.seq_num
+            connection_details["senderACKNum"] = data.ack_num
+            connection_details["receiverSeqNum"] = seq + 1
+            connection_details["receiverACKNum"] = ack_num
+
+    return connection_details
+
+def receive_data(server_sock, connection_details):
+    print("Receiver: Ready to receive data")
+    # window_start = connection_details["senderSeqNum"]  # Next expected sequence number
+    window_start = 0
+    window_end = window_start + WINDOW_SIZE - 1  # Window end is current_seq + WINDOW_SIZE - 1
+    received_data = []
+    buffer = {}  # Buffer for out-of-order packets
 
     while True:
-        data, client_addr = server_socket.recvfrom(1024)
-        received = ReliableTransportLayerProtocolHeader.from_bytes(data)
-        if(received.syn):
-            print("Received request for Step 1 of handshake")
-            print(f"Received message : {received.app_data}")
-            #intiate step 2
-            ackNum = 1 + received.seq_num
-            seq = 0
-            message = ReliableTransportLayerProtocolHeader(SERVER_ADDRESS[1], received.source_port_num, seq, ackNum, 5, app_data=f"I got your message. Do you still want  to connect?",syn=1, fin = 0, ack= 1)
-            server_socket.sendto(message.to_bytes(), client_addr)
-            print("Initiated step 2 of handshake")
+        data, addr = server_sock.recvfrom(1024)
+        header = ReliableTransportLayerProtocolHeader.from_bytes(data)
 
-            #get client's response
-            data,client_addr = server_socket.recvfrom(1024)
-            received = ReliableTransportLayerProtocolHeader.from_bytes(data)
+        # Handle connection termination (FIN packet)
+        if header.fin:  
+            print("Receiver: FIN received, starting connection termination")
+            terminate_connection(server_sock, header, addr)
+            break
 
-            #if the response is an ACK
-            if (received.ack & received.ack_num == (seq + 1)):
-                #the connection has been established
-                print("Step 3 has been completed. The connection has been established")
-                print(f"Received message : {received.app_data}")
-                handle_connection(client_addr, seq, ackNum)
-                break
-                       
+        # Check if the sequence number is within the current window
+        if window_start <= header.seq_num <= window_end:
+            if header.seq_num == window_start:
+                # In-order packet, process it
+                print(f"Receiver: Received packet {header.seq_num} with data: {header.app_data}")
+                print(time.time())
+                received_data.append(header.app_data)
+                window_start += 1  # Move the window forward
+
+                # After processing the in-order packet, check if any buffered packets can now be processed
+                while window_start in buffer:
+                    # If the next expected sequence number is in the buffer, process it
+                    buffered_packet = buffer.pop(window_start)
+                    received_data.append(buffered_packet)
+                    print(f"Receiver: Buffered packet {window_start} delivered")
+                    window_start += 1
+
+                # Update window_end based on new window_start
+                window_end = window_start + WINDOW_SIZE - 1
+                print(f"new window size: {window_end}")
             else:
-                print("Failed to initialize connection")
+                # Out-of-order packet, buffer it
+                print(f"Receiver: Out-of-order packet {header.seq_num} received. Buffering...")
+                buffer[header.seq_num] = header.app_data
 
-        print("Please Initialize Connection First")
+            # Send ACK for the next expected sequence number (window_start)
+            ack_header = ReliableTransportLayerProtocolHeader(
+                RECEIVER_PORT, SENDER_PORT, 0, window_start, WINDOW_SIZE, MSS, ack=True
+            )
+            server_sock.sendto(ack_header.to_bytes(), addr)
+            print(f"Receiver: Sent ACK for {window_start - 1}")
 
+        else:
+            # If the packet's sequence number is outside the window, discard it
+            print(f"Receiver: Packet {header.seq_num} out of range. Discarding.")
 
-def handle_connection(client_address, initial_sequence, initial_ACK):
-    print(f"Connected to {client_address}")
-
-    current_seq = initial_sequence
-    current_ACK = initial_ACK
-
-    while True:
-        data,sender_address = server_socket.recvfrom(1024)
-        received = ReliableTransportLayerProtocolHeader.from_bytes(data)
-        if(sender_address == client_address):  #making sure we are only processing files sent by our client right now
-            #if they sent a FIN message
-            if(received.fin):  
-                print("Client wants to end the connection")
-                ack_num = received.seq_num + 1
-
-                #send a FINACK message
-                fin_ack = ReliableTransportLayerProtocolHeader(
-                    SERVER_ADDRESS[1], client_address[1], current_seq,
-                    ack_num, received.receiver_window, app_data="It was nice being connected :), syn=0, ack=1, fin=1"
-                )
-                server_socket.sendto(fin_ack.to_bytes(), client_address)
-                current_seq += 1  # Increment seq for the FIN
-                print("Connection closed")
-                break
-
-            #if not requesting for the connection to be closed
-            print(f"Received {received.app_data}")
-            current_ACK = received.seq_num + len(received.app_data)
-
-            #send an acknowledgement
-            response = f"Acknowledgment : Received {received.app_data}"
-            ack_packet = ReliableTransportLayerProtocolHeader(
-                SERVER_ADDRESS[1], client_address[1], current_seq,
-                current_ACK, received.receiver_window, app_data=response, syn=0, ack=1, fin=0)
-            server_socket.sendto(ack_packet.to_bytes(), client_address)
-
-            #increment sequence number
-            current_seq += len(response)
-        if(sender_address != client_address):
-            print("File dropped : unknown client")
+        print("Receiver: Data received:", "".join(received_data))
 
 
-custom_socket()
+# Function to handle connection termination (4-way handshake)
+def terminate_connection(server_sock, header, addr):
+    print("Receiver: Sending FIN-ACK")
+    fin_bit = 1
+    ack_bit = 1
+    fin_ack_packet = ReliableTransportLayerProtocolHeader(
+        RECEIVER_PORT, SENDER_PORT, header.ack_num, header.seq_num + 1, WINDOW_SIZE, MSS, fin=fin_bit, ack=ack_bit
+    )
+    server_sock.sendto(fin_ack_packet.to_bytes(), addr)
 
+    # Wait for final ACK from sender
+    data, addr = server_sock.recvfrom(1024)
+    ack_header = ReliableTransportLayerProtocolHeader.from_bytes(data)
+    if ack_header.ack == 1 and ack_header.seq_num == header.seq_num + 1:
+        print("Receiver: Received final ACK. Connection terminated.")
+
+
+# Main function to start the receiver
+def start_receiver():
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_sock.bind((HOST, RECEIVER_PORT))
+    print("Receiver: Waiting for connections...")
+
+    # Perform handshake
+    connection_details = handshake(server_sock)
+    if connection_details["Alive"]:
+        print("Receiver: Connection established. Ready to receive data.")
+        receive_data(server_sock, connection_details)
+
+
+if __name__ == "__main__":
+    start_receiver()
