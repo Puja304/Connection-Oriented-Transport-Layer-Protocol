@@ -1,8 +1,6 @@
 import zlib
 import struct
 
-# Reliable Transport Layer Protocol Header class
-import socket
 class ReliableTransportLayerProtocolHeader:
     def __init__(self, source_port_num, dest_port_num, seq_num, ack_num, sending_window, mss, syn=False, ack=False, fin=False, app_data=""):
         self.syn = syn
@@ -74,14 +72,18 @@ class ReliableTransportLayerProtocolHeader:
 
         # Create a new header and return it
         return ReliableTransportLayerProtocolHeader(
-            syn=syn,
-            ack=ack,
-            fin=fin,
             source_port_num=source_port_num,
             dest_port_num=dest_port_num,
             seq_num=seq_num,
             ack_num=ack_num,
             sending_window=sending_window,
             mss=mss,
-            app_data=payload
+            syn=syn,
+            ack=ack,
+            fin=fin,
+            app_data=payload,
         )
+    
+    def verify_checksum(self):
+        calculated_checksum = self.calculateChecksum()
+        return calculated_checksum == self.checksum
