@@ -21,7 +21,7 @@ BETA = 0.8
 ALPHA = 0.125
 MAX_RETRIES = 5
 TIMEOUT_MULTIPLIER = 2
-LOSS_PROBABILITY = 0.0 # % of packet loss probability for simulation
+LOSS_PROBABILITY = 0.0 # % of packet loss / corruption probability for simulation
 CWND_INIT = MSS  # Initial congestion window size
 CWND_MAX = WINDOW_SIZE * MSS  # Maximum congestion window size
 SLOW_START = "SLOW_START"
@@ -136,7 +136,14 @@ def send_packet(sender_socket, connection_details, data, retransmission=False):
     if retransmission:
         added = "(Retransmission)"
     if random.random() < LOSS_PROBABILITY:
-        logger.debug(f"Client: {added} Simulating loss of packet {connection_details['senderSeqNum']}.")
+        #simulating loss or corruption (half the time not sent, the other time corrupted )
+        if random.random() < 0.5:
+            logger.debug(f"Client: {added} Simulating loss of packet {connection_details['senderSeqNum']}.")
+        else:
+            logger.debug(f"Client: {added} Simulating corruption of packet {connection_details['senderSeqNum']}.")
+            packet_header = ReliableTransportLayerProtocolHeader(SENDER_PORT, RECEIVER_PORT, connection_details["senderSeqNum"], connection_details["senderACKNum"], WINDOW_SIZE, MSS, app_data=data)
+            packet_header.checksum +=  1
+            sender_socket.sendto(packet_header.to_bytes(), (HOST, RECEIVER_PORT))
         return
     packet_header = ReliableTransportLayerProtocolHeader(SENDER_PORT, RECEIVER_PORT, connection_details["senderSeqNum"], connection_details["senderACKNum"], WINDOW_SIZE, MSS, app_data=data)
     packet_bytes = packet_header.to_bytes()
