@@ -136,15 +136,18 @@ def receive_date(server_socket, connection_details):
                 
                 if (data.seq_num == expectedSequenceNumber):
                     print(f"expected sequence 4 = {expectedSequenceNumber}")
+                    if (data.verify_checksum()):
                     #SET THE DETAILS RIGHT
-                    connection_details["receiverACKNum"] = expectedSequenceNumber
-                    print(f" Passing : {connection_details["receiverACKNum"]}")
-                    log_received_packet(data.app_data)
-                    print(f"Logged : {data.app_data}")
-                    send_ack(server_socket, connection_details)
-                    time.sleep(2)
-                    expectedSequenceNumber += connection_details["sender_mss"]
-                    connection_details["receiverACKNum"] = expectedSequenceNumber
+                        connection_details["receiverACKNum"] = expectedSequenceNumber
+                        print(f" Passing : {connection_details["receiverACKNum"]}")
+                        log_received_packet(data.app_data)
+                        print(f"Logged : {data.app_data}")
+                        send_ack(server_socket, connection_details)
+                        time.sleep(2)
+                        expectedSequenceNumber += connection_details["sender_mss"]
+                        connection_details["receiverACKNum"] = expectedSequenceNumber
+                    else:
+                        print("Packer corrupt. Dropped.")
                 else:
                     print(f"Package {data.seq_num} out of order. Was Expecting: {expectedSequenceNumber}. Dropped.")
         
